@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calendar Blockify</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Tailwind Config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          animation: {
+            'gradient': 'gradient 15s ease infinite',
+            'float': 'float 6s ease-in-out infinite',
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'shimmer': 'shimmer 2s linear infinite',
+          },
+        }
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen bg-slate-950 text-white overflow-x-hidden">
+  <!-- Animated Background -->
+  <div class="fixed inset-0 -z-10">
+    <div class="absolute inset-0 bg-gradient-to-br from-violet-950 via-slate-950 to-indigo-950"></div>
+    <div class="absolute top-0 left-1/4 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl animate-float"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl animate-float" style="animation-delay: -3s;"></div>
+    <div class="absolute top-1/2 left-1/2 w-72 h-72 bg-fuchsia-500/10 rounded-full blur-3xl animate-float" style="animation-delay: -1.5s;"></div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <header class="mb-8">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div>
+          <h1 class="text-4xl font-bold bg-gradient-to-r from-white via-violet-200 to-indigo-200 bg-clip-text text-transparent">
+            Calendar Blockify
+          </h1>
+          <p class="text-slate-400 mt-2 max-w-xl">
+            Share your availability without revealing event details. All busy blocks simply show as <span class="text-violet-300 font-medium">Unavailable</span>.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <button id="btnAuth" class="glass-button group">
+            <span class="relative z-10 flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              Connect Google Calendar
+            </span>
+          </button>
+          <button id="btnLoad" disabled class="glass-button-secondary group">
+            <span class="relative z-10 flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Load Calendar
+            </span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Setup Instructions -->
+    <section class="glass-card mb-6">
+      <details class="group">
+        <summary class="cursor-pointer list-none flex items-center justify-between p-5">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 flex items-center justify-center border border-white/10">
+              <svg class="w-5 h-5 text-violet-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <span class="font-semibold text-white">Google Cloud Setup Instructions</span>
+          </div>
+          <svg class="w-5 h-5 text-slate-400 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </summary>
+
+        <div class="px-5 pb-5 border-t border-white/5 pt-5 mt-2">
+          <div class="grid gap-4 text-sm text-slate-300">
+            <div class="space-y-4">
+              <div class="flex gap-4 items-start">
+                <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">1</span>
+                <div>
+                  <p class="font-medium text-white">Create a Google Cloud Project</p>
+                  <p class="text-slate-400 mt-1">Go to <a href="https://console.cloud.google.com" target="_blank" class="text-violet-400 hover:text-violet-300 underline">Google Cloud Console</a> and create a new project (or select an existing one).</p>
+                </div>
+              </div>
+
+              <div class="flex gap-4 items-start">
+                <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">2</span>
+                <div>
+                  <p class="font-medium text-white">Enable Google Calendar API</p>
+                  <p class="text-slate-400 mt-1">Navigate to <span class="text-slate-300">APIs & Services &rarr; Library</span>, search for "Google Calendar API" and click <span class="text-slate-300">Enable</span>.</p>
+                </div>
+              </div>
+
+              <div class="flex gap-4 items-start">
+                <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">3</span>
+                <div>
+                  <p class="font-medium text-white">Configure OAuth Consent Screen</p>
+                  <p class="text-slate-400 mt-1">Go to <span class="text-slate-300">APIs & Services &rarr; OAuth consent screen</span>. Choose <span class="text-slate-300">External</span> (or Internal for Workspace), fill in the required app name and email fields. Add your email as a test user.</p>
+                </div>
+              </div>
+
+              <div class="flex gap-4 items-start">
+                <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">4</span>
+                <div>
+                  <p class="font-medium text-white">Create OAuth Client ID</p>
+                  <p class="text-slate-400 mt-1">Go to <span class="text-slate-300">APIs & Services &rarr; Credentials &rarr; Create Credentials &rarr; OAuth client ID</span>. Select <span class="text-slate-300">Web application</span>.</p>
+                </div>
+              </div>
+
+              <div class="flex gap-4 items-start">
+                <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">5</span>
+                <div>
+                  <p class="font-medium text-white">Add Authorized JavaScript Origins</p>
+                  <div class="mt-2 p-3 rounded-xl bg-slate-900/50 border border-white/5 font-mono text-xs text-violet-300">
+                    http://localhost:5173<br/>
+                    http://localhost:8000<br/>
+                    http://127.0.0.1:5500
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex gap-4 items-start">
+                <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">6</span>
+                <div>
+                  <p class="font-medium text-white">Copy Your Client ID</p>
+                  <p class="text-slate-400 mt-1">Paste it in the input field below or in <span class="font-mono text-xs text-slate-300">app.js</span> at <span class="font-mono text-xs text-violet-400">CLIENT_ID</span>.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <div class="flex gap-3">
+                <svg class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <p class="font-medium text-amber-300">Run via local server</p>
+                  <p class="text-amber-200/70 mt-1">Don't open the HTML file directly. Use one of these:</p>
+                  <div class="mt-2 font-mono text-xs text-amber-300/80 space-y-1">
+                    <p>python3 -m http.server 8000</p>
+                    <p>npx serve</p>
+                    <p>VS Code Live Server extension</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- Client ID Input -->
+    <section class="glass-card p-5 mb-6">
+      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+        <div class="flex-1 w-full">
+          <label class="block text-sm font-medium text-slate-300 mb-2">Google OAuth Client ID</label>
+          <input
+            id="clientIdInput"
+            type="text"
+            class="glass-input w-full"
+            placeholder="Enter your Google OAuth Client ID..."
+          />
+        </div>
+        <button id="btnSaveClientId" class="glass-button-small whitespace-nowrap">
+          Save Client ID
+        </button>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Your Client ID is stored locally in your browser and never sent anywhere.</p>
+    </section>
+
+    <!-- Controls -->
+    <section class="glass-card p-5 mb-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Calendar ID -->
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Calendar ID</label>
+          <input
+            id="calendarId"
+            class="glass-input w-full"
+            value="primary"
+            placeholder="primary"
+          />
+          <p class="text-xs text-slate-500 mt-2">Use "primary" or a specific calendar email/ID</p>
+        </div>
+
+        <!-- Week Picker -->
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Select a Week</label>
+          <select id="weekSelect" class="glass-select w-full"></select>
+          <p class="text-xs text-slate-500 mt-2">Remaining weeks of this year (Mon-Sun)</p>
+        </div>
+
+        <!-- Date Range -->
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Or Choose Date Range</label>
+          <div class="flex gap-2">
+            <input id="rangeStart" type="date" class="glass-input flex-1" />
+            <span class="text-slate-500 self-center">to</span>
+            <input id="rangeEnd" type="date" class="glass-input flex-1" />
+          </div>
+          <p class="text-xs text-slate-500 mt-2">End date is inclusive</p>
+        </div>
+      </div>
+
+      <!-- Mode Toggle & Status -->
+      <div class="mt-6 pt-5 border-t border-white/5 flex flex-wrap items-center gap-4">
+        <div class="flex items-center gap-6">
+          <label class="flex items-center gap-2 cursor-pointer group">
+            <input id="useWeek" type="radio" name="mode" checked class="glass-radio" />
+            <span class="text-sm text-slate-300 group-hover:text-white transition-colors">Use selected week</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer group">
+            <input id="useRange" type="radio" name="mode" class="glass-radio" />
+            <span class="text-sm text-slate-300 group-hover:text-white transition-colors">Use date range</span>
+          </label>
+        </div>
+
+        <div class="ml-auto flex items-center gap-3">
+          <span id="status" class="text-sm text-slate-400"></span>
+          <span id="badge" class="hidden status-badge">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Connected
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Calendar Output -->
+    <section class="glass-card overflow-hidden">
+      <div class="p-5 border-b border-white/5 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-white">Availability View</h2>
+          <p class="text-sm text-slate-400 mt-1">09:00 - 21:00 daily schedule</p>
+        </div>
+        <div class="flex items-center gap-3 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="w-4 h-4 rounded-md bg-gradient-to-r from-rose-500/80 to-pink-500/80 border border-white/10"></span>
+            <span class="text-slate-400">Unavailable</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-4 h-4 rounded-md bg-slate-800/50 border border-white/5"></span>
+            <span class="text-slate-400">Available</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="calendarWrap" class="calendar-container">
+        <div class="flex items-center justify-center h-64 text-slate-500">
+          <div class="text-center">
+            <svg class="w-16 h-16 mx-auto mb-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p>Connect your calendar and click "Load Calendar" to view availability</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="mt-8 text-center text-sm text-slate-500">
+      <p>Your event details stay private. Only busy/free times are displayed.</p>
+    </footer>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="app.js"></script>
+</body>
+</html>
