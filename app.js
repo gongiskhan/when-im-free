@@ -1,15 +1,14 @@
 /**
  * Calendar Blockify
- * Google Calendar integration to display availability
+ * Google Calendar integration via ICS feeds to display availability
  */
 
 // ==========================================
 // Configuration
 // ==========================================
 const CONFIG = {
-  // Replace with your OAuth Client ID, or enter it in the UI
-  CLIENT_ID: '',
-  SCOPES: 'https://www.googleapis.com/auth/calendar.readonly',
+  // Cloudflare Worker proxy URL
+  PROXY_URL: 'https://calendar-blockify-proxy.goncalo-p-gomes.workers.dev',
 
   // Calendar display hours (24h format)
   DAY_START_HOUR: 9,
@@ -18,17 +17,16 @@ const CONFIG = {
   // Pixels per hour for rendering
   PX_PER_HOUR: 56, // 3.5rem = 56px
 
-  // Local storage key for persisting client ID
-  STORAGE_KEY: 'calendar_blockify_client_id',
+  // Local storage key
+  STORAGE_KEY_ICS_URL: 'calendar_blockify_ics_url',
 };
 
 // ==========================================
 // State
 // ==========================================
 let state = {
-  tokenClient: null,
-  accessToken: null,
-  isConnected: false,
+  events: [],
+  isLoaded: false,
 };
 
 // ==========================================
@@ -37,13 +35,12 @@ let state = {
 const elements = {};
 
 function cacheElements() {
-  elements.btnAuth = document.getElementById('btnAuth');
   elements.btnLoad = document.getElementById('btnLoad');
-  elements.btnSaveClientId = document.getElementById('btnSaveClientId');
-  elements.clientIdInput = document.getElementById('clientIdInput');
+  elements.btnDownload = document.getElementById('btnDownload');
+  elements.btnCopy = document.getElementById('btnCopy');
+  elements.icsUrlInput = document.getElementById('icsUrlInput');
   elements.status = document.getElementById('status');
   elements.badge = document.getElementById('badge');
-  elements.calendarId = document.getElementById('calendarId');
   elements.weekSelect = document.getElementById('weekSelect');
   elements.rangeStart = document.getElementById('rangeStart');
   elements.rangeEnd = document.getElementById('rangeEnd');
@@ -59,30 +56,24 @@ document.addEventListener('DOMContentLoaded', init);
 
 function init() {
   cacheElements();
-  loadSavedClientId();
+  loadSavedSettings();
   initWeekPicker();
   initDefaultDates();
   wireEventListeners();
   updateStatus();
 }
 
-function loadSavedClientId() {
-  const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
-  if (saved) {
-    CONFIG.CLIENT_ID = saved;
-    elements.clientIdInput.value = saved;
+function loadSavedSettings() {
+  const savedIcsUrl = localStorage.getItem(CONFIG.STORAGE_KEY_ICS_URL);
+  if (savedIcsUrl) {
+    elements.icsUrlInput.value = savedIcsUrl;
   }
 }
 
-function saveClientId() {
-  const value = elements.clientIdInput.value.trim();
-  if (value) {
-    CONFIG.CLIENT_ID = value;
-    localStorage.setItem(CONFIG.STORAGE_KEY, value);
-    setStatus('Client ID saved!', 'success');
-    setTimeout(updateStatus, 2000);
-  } else {
-    setStatus('Please enter a valid Client ID', 'error');
+function saveIcsUrl() {
+  const icsUrl = elements.icsUrlInput.value.trim();
+  if (icsUrl) {
+    localStorage.setItem(CONFIG.STORAGE_KEY_ICS_URL, icsUrl);
   }
 }
 
@@ -90,9 +81,12 @@ function saveClientId() {
 // Event Listeners
 // ==========================================
 function wireEventListeners() {
-  elements.btnAuth.addEventListener('click', handleAuth);
   elements.btnLoad.addEventListener('click', handleLoadCalendar);
-  elements.btnSaveClientId.addEventListener('click', saveClientId);
+  elements.btnDownload.addEventListener('click', handleDownloadImage);
+  elements.btnCopy.addEventListener('click', handleCopyToClipboard);
+
+  // Auto-save ICS URL on blur
+  elements.icsUrlInput.addEventListener('blur', saveIcsUrl);
 
   // Auto-switch mode based on input
   elements.weekSelect.addEventListener('change', () => {
@@ -107,141 +101,201 @@ function wireEventListeners() {
     elements.useRange.checked = true;
   });
 
-  // Allow pressing Enter to save client ID
-  elements.clientIdInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') saveClientId();
+  // Allow pressing Enter to load calendar
+  elements.icsUrlInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleLoadCalendar();
   });
-}
-
-// ==========================================
-// Authentication
-// ==========================================
-function handleAuth() {
-  if (!CONFIG.CLIENT_ID) {
-    setStatus('Please enter your Google OAuth Client ID first', 'error');
-    elements.clientIdInput.focus();
-    return;
-  }
-
-  initTokenClient();
-  state.tokenClient.requestAccessToken({ prompt: 'consent' });
-}
-
-function initTokenClient() {
-  if (state.tokenClient) return;
-
-  if (typeof google === 'undefined' || !google.accounts) {
-    setStatus('Google Identity Services not loaded. Check your internet connection.', 'error');
-    return;
-  }
-
-  state.tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CONFIG.CLIENT_ID,
-    scope: CONFIG.SCOPES,
-    callback: handleAuthCallback,
-  });
-}
-
-function handleAuthCallback(response) {
-  if (response.error) {
-    console.error('Auth error:', response);
-    setStatus('Authentication failed. Please try again.', 'error');
-    setConnected(false);
-    return;
-  }
-
-  state.accessToken = response.access_token;
-  setConnected(true);
-  setStatus('Connected! Click "Load Calendar" to view availability.', 'success');
-}
-
-function setConnected(connected) {
-  state.isConnected = connected;
-  elements.badge.classList.toggle('hidden', !connected);
-  elements.btnLoad.disabled = !connected;
 }
 
 // ==========================================
 // Calendar Loading
 // ==========================================
 async function handleLoadCalendar() {
-  if (!state.accessToken) {
-    setStatus('Please connect your Google Calendar first', 'error');
+  const icsUrl = elements.icsUrlInput.value.trim();
+
+  if (!icsUrl) {
+    setStatus('Please enter your Google Calendar ICS URL', 'error');
+    elements.icsUrlInput.focus();
     return;
   }
 
+  saveIcsUrl();
+
   try {
-    setStatus('Loading calendar events...', 'loading');
+    setStatus('Loading calendar...', 'loading');
+
+    const icsData = await fetchICS(icsUrl);
+    state.events = parseICS(icsData);
+    state.isLoaded = true;
 
     const { start, end } = getSelectedRange();
-    const calendarId = elements.calendarId.value.trim() || 'primary';
-
-    const events = await fetchEvents(calendarId, start, end);
-    const busyByDay = buildBusyIntervalsByDay(events, start, end);
+    const busyByDay = buildBusyIntervalsByDay(state.events, start, end);
 
     renderCalendar(start, end, busyByDay);
+    setLoaded(true);
 
-    const endDisplay = new Date(end.getTime() - 86400000); // Subtract 1 day for display
+    const endDisplay = new Date(end.getTime() - 86400000);
     setStatus(`Showing ${formatDateDisplay(start)} to ${formatDateDisplay(endDisplay)}`, 'success');
   } catch (error) {
     console.error('Load error:', error);
-
-    if (error.message.includes('401') || error.message.includes('403')) {
-      setStatus('Session expired. Please reconnect your calendar.', 'error');
-      setConnected(false);
-    } else {
-      setStatus('Failed to load calendar. Check console for details.', 'error');
-    }
+    setStatus(`Failed to load: ${error.message}`, 'error');
+    setLoaded(false);
   }
 }
 
+function setLoaded(loaded) {
+  state.isLoaded = loaded;
+  elements.badge.classList.toggle('hidden', !loaded);
+  elements.btnDownload.classList.toggle('hidden', !loaded);
+  elements.btnCopy.classList.toggle('hidden', !loaded);
+}
+
 // ==========================================
-// Google Calendar API
+// ICS Fetching & Parsing
 // ==========================================
-async function fetchEvents(calendarId, start, end) {
-  if (!state.accessToken) {
-    throw new Error('Not authenticated');
+async function fetchICS(icsUrl) {
+  const proxyUrl = `${CONFIG.PROXY_URL}?url=${encodeURIComponent(icsUrl)}`;
+
+  const response = await fetch(proxyUrl);
+
+  if (!response.ok) {
+    const text = await response.text();
+    let errorMsg = `HTTP ${response.status}`;
+    try {
+      const json = JSON.parse(text);
+      if (json.error) errorMsg = json.error;
+    } catch {}
+    throw new Error(errorMsg);
   }
 
-  const timeMin = start.toISOString();
-  const timeMax = end.toISOString();
-  const allEvents = [];
-  let pageToken = '';
+  return response.text();
+}
 
-  do {
-    const url = new URL(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
+function parseICS(icsData) {
+  const events = [];
+  const lines = icsData.split(/\r?\n/);
+
+  let currentEvent = null;
+  let currentKey = '';
+  let currentValue = '';
+
+  for (const line of lines) {
+    // Handle line continuations (lines starting with space or tab)
+    if (line.startsWith(' ') || line.startsWith('\t')) {
+      currentValue += line.slice(1);
+      continue;
+    }
+
+    // Process previous key-value if we have one
+    if (currentKey && currentEvent) {
+      processICSProperty(currentEvent, currentKey, currentValue);
+    }
+
+    // Parse new key-value
+    const colonIndex = line.indexOf(':');
+    if (colonIndex === -1) {
+      currentKey = '';
+      currentValue = '';
+      continue;
+    }
+
+    currentKey = line.slice(0, colonIndex);
+    currentValue = line.slice(colonIndex + 1);
+
+    // Handle BEGIN/END
+    if (currentKey === 'BEGIN' && currentValue === 'VEVENT') {
+      currentEvent = {};
+      currentKey = '';
+    } else if (currentKey === 'END' && currentValue === 'VEVENT') {
+      if (currentEvent && (currentEvent.start || currentEvent.startDate)) {
+        events.push(currentEvent);
+      }
+      currentEvent = null;
+      currentKey = '';
+    }
+  }
+
+  return events;
+}
+
+function processICSProperty(event, key, value) {
+  // Handle parameters in key (e.g., DTSTART;TZID=America/New_York)
+  const [baseKey, ...params] = key.split(';');
+
+  switch (baseKey) {
+    case 'DTSTART':
+      if (key.includes('VALUE=DATE')) {
+        // All-day event start
+        event.startDate = parseICSDate(value);
+        event.allDay = true;
+      } else {
+        event.start = parseICSDateTime(value);
+      }
+      break;
+
+    case 'DTEND':
+      if (key.includes('VALUE=DATE')) {
+        // All-day event end
+        event.endDate = parseICSDate(value);
+      } else {
+        event.end = parseICSDateTime(value);
+      }
+      break;
+
+    case 'SUMMARY':
+      event.summary = unescapeICS(value);
+      break;
+
+    case 'RRULE':
+      // We don't expand recurring events - Google's ICS feed gives us instances
+      event.rrule = value;
+      break;
+  }
+}
+
+function parseICSDateTime(value) {
+  // Format: 20240115T140000Z or 20240115T140000
+  const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second, isUTC] = match;
+
+  if (isUTC) {
+    return new Date(Date.UTC(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hour),
+      parseInt(minute),
+      parseInt(second)
+    ));
+  } else {
+    return new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hour),
+      parseInt(minute),
+      parseInt(second)
     );
+  }
+}
 
-    url.searchParams.set('timeMin', timeMin);
-    url.searchParams.set('timeMax', timeMax);
-    url.searchParams.set('singleEvents', 'true');
-    url.searchParams.set('orderBy', 'startTime');
-    url.searchParams.set('maxResults', '2500');
+function parseICSDate(value) {
+  // Format: 20240115
+  const match = value.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (!match) return null;
 
-    if (pageToken) {
-      url.searchParams.set('pageToken', pageToken);
-    }
+  const [, year, month, day] = match;
+  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+}
 
-    const response = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${state.accessToken}` },
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Calendar API error ${response.status}: ${text}`);
-    }
-
-    const data = await response.json();
-
-    if (Array.isArray(data.items)) {
-      allEvents.push(...data.items);
-    }
-
-    pageToken = data.nextPageToken || '';
-  } while (pageToken);
-
-  return allEvents;
+function unescapeICS(value) {
+  return value
+    .replace(/\\n/g, '\n')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\');
 }
 
 // ==========================================
@@ -277,18 +331,28 @@ function buildBusyIntervalsByDay(events, rangeStart, rangeEnd) {
 
 function getEventTimes(event) {
   // Timed events
-  if (event?.start?.dateTime && event?.end?.dateTime) {
+  if (event.start && event.end) {
     return {
-      start: new Date(event.start.dateTime),
-      end: new Date(event.end.dateTime),
+      start: event.start,
+      end: event.end,
     };
   }
 
   // All-day events
-  if (event?.start?.date && event?.end?.date) {
+  if (event.startDate && event.endDate) {
     return {
-      start: parseDate(event.start.date),
-      end: parseDate(event.end.date),
+      start: event.startDate,
+      end: event.endDate,
+    };
+  }
+
+  // Single all-day event (no end date means next day)
+  if (event.startDate) {
+    const end = new Date(event.startDate);
+    end.setDate(end.getDate() + 1);
+    return {
+      start: event.startDate,
+      end: end,
     };
   }
 
@@ -358,7 +422,6 @@ function renderCalendar(rangeStart, rangeEnd, busyByDay) {
   const totalHeight = (CONFIG.DAY_END_HOUR - CONFIG.DAY_START_HOUR) * CONFIG.PX_PER_HOUR;
   const today = formatDate(new Date());
 
-  const columnCount = days.length + 1; // +1 for time column
   const columnWidth = days.length <= 7 ? 'minmax(140px, 1fr)' : 'minmax(120px, 1fr)';
 
   let html = `
@@ -490,7 +553,7 @@ function initWeekPicker() {
   elements.weekSelect.innerHTML = weeks
     .map((week, index) => {
       const startStr = formatDateDisplay(week.start);
-      const endStr = formatDateDisplay(new Date(week.end.getTime() - 86400000)); // -1 day for display
+      const endStr = formatDateDisplay(new Date(week.end.getTime() - 86400000));
       return `<option value="${index}">${startStr} - ${endStr}</option>`;
     })
     .join('');
@@ -509,14 +572,13 @@ function initDefaultDates() {
 
 function getSelectedRange() {
   if (elements.useRange.checked) {
-    const start = parseDate(elements.rangeStart.value);
-    const endInclusive = parseDate(elements.rangeEnd.value);
+    const start = parseDateString(elements.rangeStart.value);
+    const endInclusive = parseDateString(elements.rangeEnd.value);
 
     if (!start || !endInclusive) {
       throw new Error('Invalid date range');
     }
 
-    // Make end exclusive by adding 1 day
     const end = new Date(endInclusive);
     end.setDate(end.getDate() + 1);
 
@@ -552,7 +614,7 @@ function getStartOfWeek(date) {
   d.setHours(0, 0, 0, 0);
 
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Monday start
+  const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
 
   return d;
@@ -578,7 +640,7 @@ function getHoursArray() {
   return hours;
 }
 
-function parseDate(str) {
+function parseDateString(str) {
   if (!str) return null;
   const [y, m, d] = str.split('-').map(Number);
   if (!y || !m || !d) return null;
@@ -610,7 +672,6 @@ function formatDateDisplay(date) {
 function setStatus(message, type = 'info') {
   elements.status.textContent = message;
 
-  // Reset classes
   elements.status.className = 'text-sm transition-colors duration-200';
 
   switch (type) {
@@ -629,11 +690,100 @@ function setStatus(message, type = 'info') {
 }
 
 function updateStatus() {
-  if (!CONFIG.CLIENT_ID) {
-    setStatus('Enter your Google OAuth Client ID to get started', 'info');
-  } else if (!state.isConnected) {
-    setStatus('Ready. Click "Connect Google Calendar" to begin.', 'info');
+  const icsUrl = elements.icsUrlInput.value.trim();
+
+  if (!icsUrl) {
+    setStatus('Enter your Google Calendar ICS URL to get started', 'info');
   } else {
-    setStatus('Connected. Select a week or date range and click "Load Calendar".', 'success');
+    setStatus('Ready. Click "Load Calendar" to view availability.', 'info');
+  }
+}
+
+// ==========================================
+// Image Export
+// ==========================================
+async function captureCalendarImage() {
+  const calendarSection = elements.calendarWrap.closest('section');
+
+  // Temporarily add padding and background for better screenshot
+  const originalPadding = calendarSection.style.padding;
+  calendarSection.style.padding = '20px';
+
+  try {
+    const canvas = await html2canvas(calendarSection, {
+      backgroundColor: '#0f172a', // slate-900
+      scale: 2, // Higher resolution
+      logging: false,
+      useCORS: true,
+    });
+
+    calendarSection.style.padding = originalPadding;
+    return canvas;
+  } catch (error) {
+    calendarSection.style.padding = originalPadding;
+    throw error;
+  }
+}
+
+async function handleDownloadImage() {
+  try {
+    setStatus('Generating image...', 'loading');
+    elements.btnDownload.disabled = true;
+
+    const canvas = await captureCalendarImage();
+
+    // Generate filename with date range
+    const { start, end } = getSelectedRange();
+    const endDisplay = new Date(end.getTime() - 86400000);
+    const startStr = formatDate(start);
+    const endStr = formatDate(endDisplay);
+    const filename = `availability-${startStr}-to-${endStr}.png`;
+
+    // Download
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+
+    setStatus('Image downloaded', 'success');
+  } catch (error) {
+    console.error('Download error:', error);
+    setStatus('Failed to generate image', 'error');
+  } finally {
+    elements.btnDownload.disabled = false;
+  }
+}
+
+async function handleCopyToClipboard() {
+  try {
+    setStatus('Copying to clipboard...', 'loading');
+    elements.btnCopy.disabled = true;
+
+    const canvas = await captureCalendarImage();
+
+    // Convert canvas to blob
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Failed to create blob'));
+      }, 'image/png');
+    });
+
+    // Copy to clipboard
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blob }),
+    ]);
+
+    setStatus('Copied to clipboard', 'success');
+  } catch (error) {
+    console.error('Copy error:', error);
+    // Fallback message if clipboard API fails
+    if (error.name === 'NotAllowedError') {
+      setStatus('Clipboard access denied. Try downloading instead.', 'error');
+    } else {
+      setStatus('Failed to copy to clipboard', 'error');
+    }
+  } finally {
+    elements.btnCopy.disabled = false;
   }
 }

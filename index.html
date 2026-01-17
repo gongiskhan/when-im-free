@@ -8,11 +8,11 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Google Identity Services -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-
   <!-- Custom Styles -->
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- html2canvas for image export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <!-- Tailwind Config -->
   <script>
@@ -55,20 +55,28 @@
           </p>
         </div>
         <div class="flex flex-wrap gap-3">
-          <button id="btnAuth" class="glass-button group">
-            <span class="relative z-10 flex items-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-              Connect Google Calendar
-            </span>
-          </button>
-          <button id="btnLoad" disabled class="glass-button-secondary group">
+          <button id="btnLoad" class="glass-button group">
             <span class="relative z-10 flex items-center gap-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               Load Calendar
+            </span>
+          </button>
+          <button id="btnDownload" class="glass-button group hidden" title="Download as image">
+            <span class="relative z-10 flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download
+            </span>
+          </button>
+          <button id="btnCopy" class="glass-button group hidden" title="Copy to clipboard">
+            <span class="relative z-10 flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+              Copy
             </span>
           </button>
         </div>
@@ -86,7 +94,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <span class="font-semibold text-white">Google Cloud Setup Instructions</span>
+            <span class="font-semibold text-white">How to Get Your Calendar ICS URL</span>
           </div>
           <svg class="w-5 h-5 text-slate-400 transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -99,69 +107,33 @@
               <div class="flex gap-4 items-start">
                 <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">1</span>
                 <div>
-                  <p class="font-medium text-white">Create a Google Cloud Project</p>
-                  <p class="text-slate-400 mt-1">Go to <a href="https://console.cloud.google.com" target="_blank" class="text-violet-400 hover:text-violet-300 underline">Google Cloud Console</a> and create a new project (or select an existing one).</p>
+                  <p class="font-medium text-white">Open Google Calendar Settings</p>
+                  <p class="text-slate-400 mt-1">Go to <a href="https://calendar.google.com/calendar/u/0/r/settings" target="_blank" class="text-violet-400 hover:text-violet-300 underline">Google Calendar</a> and click the gear icon, then "Settings".</p>
                 </div>
               </div>
 
               <div class="flex gap-4 items-start">
                 <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">2</span>
                 <div>
-                  <p class="font-medium text-white">Enable Google Calendar API</p>
-                  <p class="text-slate-400 mt-1">Navigate to <span class="text-slate-300">APIs & Services &rarr; Library</span>, search for "Google Calendar API" and click <span class="text-slate-300">Enable</span>.</p>
+                  <p class="font-medium text-white">Select Your Calendar</p>
+                  <p class="text-slate-400 mt-1">In the left sidebar under "Settings for my calendars", click on the calendar you want to share.</p>
                 </div>
               </div>
 
               <div class="flex gap-4 items-start">
                 <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">3</span>
                 <div>
-                  <p class="font-medium text-white">Configure OAuth Consent Screen</p>
-                  <p class="text-slate-400 mt-1">Go to <span class="text-slate-300">APIs & Services &rarr; OAuth consent screen</span>. Choose <span class="text-slate-300">External</span> (or Internal for Workspace), fill in the required app name and email fields. Add your email as a test user.</p>
+                  <p class="font-medium text-white">Find "Secret address in iCal format"</p>
+                  <p class="text-slate-400 mt-1">Scroll down to "Integrate calendar" section. Look for <span class="text-slate-300">"Secret address in iCal format"</span> and copy the URL.</p>
+                  <p class="text-amber-400/80 mt-2 text-xs">Note: Keep this URL private - anyone with it can see your calendar events.</p>
                 </div>
               </div>
 
               <div class="flex gap-4 items-start">
                 <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">4</span>
                 <div>
-                  <p class="font-medium text-white">Create OAuth Client ID</p>
-                  <p class="text-slate-400 mt-1">Go to <span class="text-slate-300">APIs & Services &rarr; Credentials &rarr; Create Credentials &rarr; OAuth client ID</span>. Select <span class="text-slate-300">Web application</span>.</p>
-                </div>
-              </div>
-
-              <div class="flex gap-4 items-start">
-                <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">5</span>
-                <div>
-                  <p class="font-medium text-white">Add Authorized JavaScript Origins</p>
-                  <div class="mt-2 p-3 rounded-xl bg-slate-900/50 border border-white/5 font-mono text-xs text-violet-300">
-                    http://localhost:5173<br/>
-                    http://localhost:8000<br/>
-                    http://127.0.0.1:5500
-                  </div>
-                </div>
-              </div>
-
-              <div class="flex gap-4 items-start">
-                <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">6</span>
-                <div>
-                  <p class="font-medium text-white">Copy Your Client ID</p>
-                  <p class="text-slate-400 mt-1">Paste it in the input field below or in <span class="font-mono text-xs text-slate-300">app.js</span> at <span class="font-mono text-xs text-violet-400">CLIENT_ID</span>.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-              <div class="flex gap-3">
-                <svg class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div>
-                  <p class="font-medium text-amber-300">Run via local server</p>
-                  <p class="text-amber-200/70 mt-1">Don't open the HTML file directly. Use one of these:</p>
-                  <div class="mt-2 font-mono text-xs text-amber-300/80 space-y-1">
-                    <p>python3 -m http.server 8000</p>
-                    <p>npx serve</p>
-                    <p>VS Code Live Server extension</p>
-                  </div>
+                  <p class="font-medium text-white">Paste Below</p>
+                  <p class="text-slate-400 mt-1">Paste the ICS URL in the input field below and click "Load Calendar".</p>
                 </div>
               </div>
             </div>
@@ -170,40 +142,23 @@
       </details>
     </section>
 
-    <!-- Client ID Input -->
+    <!-- Configuration -->
     <section class="glass-card p-5 mb-6">
-      <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-        <div class="flex-1 w-full">
-          <label class="block text-sm font-medium text-slate-300 mb-2">Google OAuth Client ID</label>
-          <input
-            id="clientIdInput"
-            type="text"
-            class="glass-input w-full"
-            placeholder="Enter your Google OAuth Client ID..."
-          />
-        </div>
-        <button id="btnSaveClientId" class="glass-button-small whitespace-nowrap">
-          Save Client ID
-        </button>
+      <div>
+        <label class="block text-sm font-medium text-slate-300 mb-2">Google Calendar ICS URL</label>
+        <input
+          id="icsUrlInput"
+          type="text"
+          class="glass-input w-full"
+          placeholder="https://calendar.google.com/calendar/ical/..."
+        />
+        <p class="text-xs text-slate-500 mt-2">Your secret iCal address from Google Calendar settings. Stored locally in your browser.</p>
       </div>
-      <p class="text-xs text-slate-500 mt-2">Your Client ID is stored locally in your browser and never sent anywhere.</p>
     </section>
 
     <!-- Controls -->
     <section class="glass-card p-5 mb-6">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Calendar ID -->
-        <div>
-          <label class="block text-sm font-medium text-slate-300 mb-2">Calendar ID</label>
-          <input
-            id="calendarId"
-            class="glass-input w-full"
-            value="primary"
-            placeholder="primary"
-          />
-          <p class="text-xs text-slate-500 mt-2">Use "primary" or a specific calendar email/ID</p>
-        </div>
-
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Week Picker -->
         <div>
           <label class="block text-sm font-medium text-slate-300 mb-2">Select a Week</label>
@@ -243,7 +198,7 @@
               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            Connected
+            Loaded
           </span>
         </div>
       </div>
@@ -274,7 +229,7 @@
             <svg class="w-16 h-16 mx-auto mb-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <p>Connect your calendar and click "Load Calendar" to view availability</p>
+            <p>Enter your ICS URL and click "Load Calendar" to view availability</p>
           </div>
         </div>
       </div>

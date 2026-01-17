@@ -1,0 +1,10 @@
+# Cloudflare Worker configuration for Calendar Blockify ICS Proxy
+name = "calendar-blockify-proxy"
+main = "ics-proxy.js"
+compatibility_date = "2024-01-01"
+account_id = "173040a19332ef9902a322debcfdde59"
+
+# Optional: Add your custom domain
+# routes = [
+#   { pattern = "ics-proxy.yourdomain.com", custom_domain = true }
+# ]
