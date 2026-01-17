@@ -76,6 +76,11 @@ function init() {
   initDefaultDates();
   wireEventListeners();
   updateStatus();
+
+  // Auto-load calendars if any are saved
+  if (state.calendars.length > 0) {
+    handleLoadCalendars();
+  }
 }
 
 function loadSavedCalendars() {
@@ -170,17 +175,44 @@ function wireEventListeners() {
   elements.btnCopy.addEventListener('click', handleCopyToClipboard);
   elements.btnAddCalendar.addEventListener('click', handleAddCalendar);
 
-  // Auto-switch mode based on input
+  // Auto-switch mode and reload on date changes
   elements.weekSelect.addEventListener('change', () => {
     elements.useWeek.checked = true;
+    if (state.isLoaded) {
+      refreshCalendarDisplay();
+      updateDateRangeStatus();
+    }
   });
 
   elements.rangeStart.addEventListener('change', () => {
     elements.useRange.checked = true;
+    if (state.isLoaded) {
+      refreshCalendarDisplay();
+      updateDateRangeStatus();
+    }
   });
 
   elements.rangeEnd.addEventListener('change', () => {
     elements.useRange.checked = true;
+    if (state.isLoaded) {
+      refreshCalendarDisplay();
+      updateDateRangeStatus();
+    }
+  });
+
+  // Also reload when switching between week and range modes
+  elements.useWeek.addEventListener('change', () => {
+    if (state.isLoaded && elements.useWeek.checked) {
+      refreshCalendarDisplay();
+      updateDateRangeStatus();
+    }
+  });
+
+  elements.useRange.addEventListener('change', () => {
+    if (state.isLoaded && elements.useRange.checked) {
+      refreshCalendarDisplay();
+      updateDateRangeStatus();
+    }
   });
 
   // Allow pressing Enter to add calendar
@@ -876,9 +908,17 @@ function setStatus(message, type = 'info') {
 function updateStatus() {
   if (state.calendars.length === 0) {
     setStatus('Add your Google Calendar ICS URLs to get started', 'info');
+  } else if (state.isLoaded) {
+    updateDateRangeStatus();
   } else {
     setStatus(`${state.calendars.length} calendar(s) added. Click "Load Calendars" to view.`, 'info');
   }
+}
+
+function updateDateRangeStatus() {
+  const { start, end } = getSelectedRange();
+  const endDisplay = new Date(end.getTime() - 86400000);
+  setStatus(`Showing ${formatDateDisplay(start)} to ${formatDateDisplay(endDisplay)}`, 'success');
 }
 
 // ==========================================
