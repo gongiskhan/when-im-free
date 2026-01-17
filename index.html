@@ -60,7 +60,7 @@
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              Load Calendar
+              Load Calendars
             </span>
           </button>
           <button id="btnDownload" class="glass-button group hidden" title="Download as image">
@@ -132,8 +132,8 @@
               <div class="flex gap-4 items-start">
                 <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 font-semibold text-xs border border-violet-500/30">4</span>
                 <div>
-                  <p class="font-medium text-white">Paste Below</p>
-                  <p class="text-slate-400 mt-1">Paste the ICS URL in the input field below and click "Load Calendar".</p>
+                  <p class="font-medium text-white">Add to Calendar Blockify</p>
+                  <p class="text-slate-400 mt-1">Paste the ICS URL below, give it a name, and click "Add". You can add multiple calendars.</p>
                 </div>
               </div>
             </div>
@@ -142,18 +142,42 @@
       </details>
     </section>
 
-    <!-- Configuration -->
+    <!-- Calendar Management -->
     <section class="glass-card p-5 mb-6">
-      <div>
-        <label class="block text-sm font-medium text-slate-300 mb-2">Google Calendar ICS URL</label>
+      <h3 class="text-lg font-semibold text-white mb-4">Your Calendars</h3>
+
+      <!-- Add Calendar Form -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
+        <input
+          id="calendarNameInput"
+          type="text"
+          class="glass-input sm:w-48"
+          placeholder="Calendar name (optional)"
+        />
         <input
           id="icsUrlInput"
           type="text"
-          class="glass-input w-full"
+          class="glass-input flex-1"
           placeholder="https://calendar.google.com/calendar/ical/..."
         />
-        <p class="text-xs text-slate-500 mt-2">Your secret iCal address from Google Calendar settings. Stored locally in your browser.</p>
+        <button id="btnAddCalendar" class="glass-button whitespace-nowrap">
+          <span class="relative z-10 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add
+          </span>
+        </button>
       </div>
+
+      <!-- Calendar List -->
+      <div id="calendarList" class="space-y-2">
+        <div class="text-center py-4 text-slate-500 text-sm">
+          No calendars added yet. Add your first calendar above.
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-500 mt-4">Toggle visibility by clicking the checkbox. Your calendars are stored locally in your browser.</p>
     </section>
 
     <!-- Controls -->
@@ -229,7 +253,7 @@
             <svg class="w-16 h-16 mx-auto mb-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <p>Enter your ICS URL and click "Load Calendar" to view availability</p>
+            <p>Add your calendars above and click "Load Calendars" to view availability</p>
           </div>
         </div>
       </div>

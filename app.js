@@ -1,6 +1,7 @@
 /**
  * Calendar Blockify
  * Google Calendar integration via ICS feeds to display availability
+ * Supports multiple calendars with visibility toggles
  */
 
 // ==========================================
@@ -18,16 +19,26 @@ const CONFIG = {
   PX_PER_HOUR: 56, // 3.5rem = 56px
 
   // Local storage key
-  STORAGE_KEY_ICS_URL: 'calendar_blockify_ics_url',
+  STORAGE_KEY_CALENDARS: 'calendar_blockify_calendars',
 };
 
 // ==========================================
 // State
 // ==========================================
 let state = {
-  events: [],
+  calendars: [], // Array of { id, name, url, visible, events, color }
   isLoaded: false,
 };
+
+// Calendar colors for visual distinction
+const CALENDAR_COLORS = [
+  { bg: 'from-rose-500/80 to-pink-500/80', border: 'border-rose-400/30' },
+  { bg: 'from-violet-500/80 to-purple-500/80', border: 'border-violet-400/30' },
+  { bg: 'from-blue-500/80 to-cyan-500/80', border: 'border-blue-400/30' },
+  { bg: 'from-emerald-500/80 to-teal-500/80', border: 'border-emerald-400/30' },
+  { bg: 'from-amber-500/80 to-orange-500/80', border: 'border-amber-400/30' },
+  { bg: 'from-fuchsia-500/80 to-pink-500/80', border: 'border-fuchsia-400/30' },
+];
 
 // ==========================================
 // DOM Elements
@@ -38,7 +49,10 @@ function cacheElements() {
   elements.btnLoad = document.getElementById('btnLoad');
   elements.btnDownload = document.getElementById('btnDownload');
   elements.btnCopy = document.getElementById('btnCopy');
+  elements.btnAddCalendar = document.getElementById('btnAddCalendar');
   elements.icsUrlInput = document.getElementById('icsUrlInput');
+  elements.calendarNameInput = document.getElementById('calendarNameInput');
+  elements.calendarList = document.getElementById('calendarList');
   elements.status = document.getElementById('status');
   elements.badge = document.getElementById('badge');
   elements.weekSelect = document.getElementById('weekSelect');
@@ -56,37 +70,105 @@ document.addEventListener('DOMContentLoaded', init);
 
 function init() {
   cacheElements();
-  loadSavedSettings();
+  loadSavedCalendars();
+  renderCalendarList();
   initWeekPicker();
   initDefaultDates();
   wireEventListeners();
   updateStatus();
 }
 
-function loadSavedSettings() {
-  const savedIcsUrl = localStorage.getItem(CONFIG.STORAGE_KEY_ICS_URL);
-  if (savedIcsUrl) {
-    elements.icsUrlInput.value = savedIcsUrl;
+function loadSavedCalendars() {
+  try {
+    const saved = localStorage.getItem(CONFIG.STORAGE_KEY_CALENDARS);
+    if (saved) {
+      state.calendars = JSON.parse(saved);
+      // Clear events on load (will be fetched fresh)
+      state.calendars.forEach(cal => cal.events = []);
+    }
+  } catch (e) {
+    console.error('Failed to load saved calendars:', e);
+    state.calendars = [];
   }
 }
 
-function saveIcsUrl() {
-  const icsUrl = elements.icsUrlInput.value.trim();
-  if (icsUrl) {
-    localStorage.setItem(CONFIG.STORAGE_KEY_ICS_URL, icsUrl);
+function saveCalendars() {
+  // Save without events (they'll be fetched fresh)
+  const toSave = state.calendars.map(({ id, name, url, visible, color }) => ({
+    id, name, url, visible, color
+  }));
+  localStorage.setItem(CONFIG.STORAGE_KEY_CALENDARS, JSON.stringify(toSave));
+}
+
+// ==========================================
+// Calendar Management
+// ==========================================
+function addCalendar(name, url) {
+  const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+  const colorIndex = state.calendars.length % CALENDAR_COLORS.length;
+
+  const calendar = {
+    id,
+    name: name || extractCalendarName(url),
+    url,
+    visible: true,
+    events: [],
+    color: colorIndex,
+  };
+
+  state.calendars.push(calendar);
+  saveCalendars();
+  renderCalendarList();
+  return calendar;
+}
+
+function removeCalendar(id) {
+  state.calendars = state.calendars.filter(cal => cal.id !== id);
+  saveCalendars();
+  renderCalendarList();
+
+  // Re-render if we have loaded data
+  if (state.isLoaded) {
+    refreshCalendarDisplay();
   }
+}
+
+function toggleCalendarVisibility(id) {
+  const cal = state.calendars.find(c => c.id === id);
+  if (cal) {
+    cal.visible = !cal.visible;
+    saveCalendars();
+    renderCalendarList();
+
+    // Re-render if we have loaded data
+    if (state.isLoaded) {
+      refreshCalendarDisplay();
+    }
+  }
+}
+
+function extractCalendarName(url) {
+  // Try to extract email from Google Calendar URL
+  const match = url.match(/calendar\/ical\/([^/]+)/);
+  if (match) {
+    const decoded = decodeURIComponent(match[1]);
+    // If it looks like an email, use the part before @
+    if (decoded.includes('@')) {
+      return decoded.split('@')[0];
+    }
+    return decoded;
+  }
+  return 'Calendar ' + (state.calendars.length + 1);
 }
 
 // ==========================================
 // Event Listeners
 // ==========================================
 function wireEventListeners() {
-  elements.btnLoad.addEventListener('click', handleLoadCalendar);
+  elements.btnLoad.addEventListener('click', handleLoadCalendars);
   elements.btnDownload.addEventListener('click', handleDownloadImage);
   elements.btnCopy.addEventListener('click', handleCopyToClipboard);
-
-  // Auto-save ICS URL on blur
-  elements.icsUrlInput.addEventListener('blur', saveIcsUrl);
+  elements.btnAddCalendar.addEventListener('click', handleAddCalendar);
 
   // Auto-switch mode based on input
   elements.weekSelect.addEventListener('change', () => {
@@ -101,46 +183,148 @@ function wireEventListeners() {
     elements.useRange.checked = true;
   });
 
-  // Allow pressing Enter to load calendar
+  // Allow pressing Enter to add calendar
   elements.icsUrlInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') handleLoadCalendar();
+    if (e.key === 'Enter') handleAddCalendar();
   });
+
+  elements.calendarNameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleAddCalendar();
+  });
+}
+
+function handleAddCalendar() {
+  const url = elements.icsUrlInput.value.trim();
+  const name = elements.calendarNameInput.value.trim();
+
+  if (!url) {
+    setStatus('Please enter a Google Calendar ICS URL', 'error');
+    elements.icsUrlInput.focus();
+    return;
+  }
+
+  // Check for duplicate URL
+  if (state.calendars.some(cal => cal.url === url)) {
+    setStatus('This calendar has already been added', 'error');
+    return;
+  }
+
+  addCalendar(name, url);
+
+  // Clear inputs
+  elements.icsUrlInput.value = '';
+  elements.calendarNameInput.value = '';
+
+  setStatus('Calendar added. Click "Load Calendars" to fetch data.', 'success');
+}
+
+// ==========================================
+// Calendar List Rendering
+// ==========================================
+function renderCalendarList() {
+  if (state.calendars.length === 0) {
+    elements.calendarList.innerHTML = `
+      <div class="text-center py-4 text-slate-500 text-sm">
+        No calendars added yet. Add your first calendar above.
+      </div>
+    `;
+    return;
+  }
+
+  elements.calendarList.innerHTML = state.calendars.map(cal => {
+    const colorClass = CALENDAR_COLORS[cal.color];
+    return `
+      <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-800/30 border border-white/5 group">
+        <button
+          onclick="toggleCalendarVisibility('${cal.id}')"
+          class="flex-shrink-0 w-5 h-5 rounded border-2 ${cal.visible ? 'bg-gradient-to-r ' + colorClass.bg + ' border-transparent' : 'border-slate-500 bg-transparent'} transition-all hover:scale-110"
+          title="${cal.visible ? 'Hide calendar' : 'Show calendar'}"
+        >
+          ${cal.visible ? `<svg class="w-full h-full text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+          </svg>` : ''}
+        </button>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-sm text-white truncate">${escapeHtml(cal.name)}</div>
+          <div class="text-xs text-slate-500 truncate">${escapeHtml(cal.url.substring(0, 50))}...</div>
+        </div>
+        <button
+          onclick="removeCalendar('${cal.id}')"
+          class="flex-shrink-0 p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+          title="Remove calendar"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 // ==========================================
 // Calendar Loading
 // ==========================================
-async function handleLoadCalendar() {
-  const icsUrl = elements.icsUrlInput.value.trim();
-
-  if (!icsUrl) {
-    setStatus('Please enter your Google Calendar ICS URL', 'error');
-    elements.icsUrlInput.focus();
+async function handleLoadCalendars() {
+  if (state.calendars.length === 0) {
+    setStatus('Please add at least one calendar first', 'error');
     return;
   }
 
-  saveIcsUrl();
-
   try {
-    setStatus('Loading calendar...', 'loading');
+    setStatus('Loading calendars...', 'loading');
 
-    const icsData = await fetchICS(icsUrl);
-    state.events = parseICS(icsData);
+    // Fetch all calendars in parallel
+    const results = await Promise.allSettled(
+      state.calendars.map(async (cal) => {
+        const icsData = await fetchICS(cal.url);
+        cal.events = parseICS(icsData);
+        return cal;
+      })
+    );
+
+    // Count successes and failures
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+
+    if (successful === 0) {
+      throw new Error('Failed to load any calendars');
+    }
+
     state.isLoaded = true;
-
-    const { start, end } = getSelectedRange();
-    const busyByDay = buildBusyIntervalsByDay(state.events, start, end);
-
-    renderCalendar(start, end, busyByDay);
+    refreshCalendarDisplay();
     setLoaded(true);
 
-    const endDisplay = new Date(end.getTime() - 86400000);
-    setStatus(`Showing ${formatDateDisplay(start)} to ${formatDateDisplay(endDisplay)}`, 'success');
+    if (failed > 0) {
+      setStatus(`Loaded ${successful} calendar(s), ${failed} failed`, 'success');
+    } else {
+      const { start, end } = getSelectedRange();
+      const endDisplay = new Date(end.getTime() - 86400000);
+      setStatus(`Showing ${formatDateDisplay(start)} to ${formatDateDisplay(endDisplay)}`, 'success');
+    }
   } catch (error) {
     console.error('Load error:', error);
     setStatus(`Failed to load: ${error.message}`, 'error');
     setLoaded(false);
   }
+}
+
+function refreshCalendarDisplay() {
+  const { start, end } = getSelectedRange();
+
+  // Collect events from all visible calendars
+  const allEvents = state.calendars
+    .filter(cal => cal.visible)
+    .flatMap(cal => cal.events);
+
+  const busyByDay = buildBusyIntervalsByDay(allEvents, start, end);
+  renderCalendar(start, end, busyByDay);
 }
 
 function setLoaded(loaded) {
@@ -690,12 +874,10 @@ function setStatus(message, type = 'info') {
 }
 
 function updateStatus() {
-  const icsUrl = elements.icsUrlInput.value.trim();
-
-  if (!icsUrl) {
-    setStatus('Enter your Google Calendar ICS URL to get started', 'info');
+  if (state.calendars.length === 0) {
+    setStatus('Add your Google Calendar ICS URLs to get started', 'info');
   } else {
-    setStatus('Ready. Click "Load Calendar" to view availability.', 'info');
+    setStatus(`${state.calendars.length} calendar(s) added. Click "Load Calendars" to view.`, 'info');
   }
 }
 
@@ -787,3 +969,7 @@ async function handleCopyToClipboard() {
     elements.btnCopy.disabled = false;
   }
 }
+
+// Make functions available globally for onclick handlers
+window.toggleCalendarVisibility = toggleCalendarVisibility;
+window.removeCalendar = removeCalendar;
