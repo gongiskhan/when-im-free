@@ -447,7 +447,168 @@ function parseICS(icsData) {
     }
   }
 
-  return events;
+  // Expand recurring events
+  return expandRecurringEvents(events);
+}
+
+// Expand recurring events based on RRULE
+function expandRecurringEvents(events) {
+  const expanded = [];
+  // Look ahead 1 year for recurring events
+  const rangeStart = new Date();
+  rangeStart.setMonth(rangeStart.getMonth() - 1);
+  const rangeEnd = new Date();
+  rangeEnd.setFullYear(rangeEnd.getFullYear() + 1);
+
+  for (const event of events) {
+    if (!event.rrule) {
+      // Non-recurring event, add as-is
+      expanded.push(event);
+      continue;
+    }
+
+    // Parse RRULE
+    const rule = parseRRule(event.rrule);
+    if (!rule) {
+      expanded.push(event);
+      continue;
+    }
+
+    // Get base event time
+    const baseStart = event.start || event.startDate;
+    const baseEnd = event.end || event.endDate;
+    if (!baseStart) continue;
+
+    const duration = baseEnd ? baseEnd.getTime() - baseStart.getTime() : 3600000; // Default 1 hour
+
+    // Determine recurrence end
+    let recurrenceEnd = rangeEnd;
+    if (rule.until && rule.until < rangeEnd) {
+      recurrenceEnd = rule.until;
+    }
+
+    // Generate occurrences
+    const occurrences = generateOccurrences(baseStart, rule, rangeStart, recurrenceEnd);
+
+    for (const occStart of occurrences) {
+      const occEnd = new Date(occStart.getTime() + duration);
+      const occurrence = {
+        summary: event.summary,
+      };
+
+      if (event.allDay) {
+        occurrence.startDate = occStart;
+        occurrence.endDate = occEnd;
+        occurrence.allDay = true;
+      } else {
+        occurrence.start = occStart;
+        occurrence.end = occEnd;
+      }
+
+      expanded.push(occurrence);
+    }
+  }
+
+  return expanded;
+}
+
+function parseRRule(rruleStr) {
+  const parts = rruleStr.split(';');
+  const rule = {};
+
+  for (const part of parts) {
+    const [key, value] = part.split('=');
+    switch (key) {
+      case 'FREQ':
+        rule.freq = value; // DAILY, WEEKLY, MONTHLY, YEARLY
+        break;
+      case 'INTERVAL':
+        rule.interval = parseInt(value) || 1;
+        break;
+      case 'UNTIL':
+        rule.until = parseICSDateTime(value) || parseICSDate(value);
+        break;
+      case 'COUNT':
+        rule.count = parseInt(value);
+        break;
+      case 'BYDAY':
+        rule.byDay = value.split(','); // MO, TU, WE, TH, FR, SA, SU
+        break;
+      case 'BYMONTHDAY':
+        rule.byMonthDay = value.split(',').map(d => parseInt(d));
+        break;
+    }
+  }
+
+  if (!rule.freq) return null;
+  rule.interval = rule.interval || 1;
+
+  return rule;
+}
+
+function generateOccurrences(baseStart, rule, rangeStart, rangeEnd) {
+  const occurrences = [];
+  const maxOccurrences = rule.count || 500; // Safety limit
+  let count = 0;
+
+  // Day name to JS day number (0=Sun, 1=Mon, etc.)
+  const dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+  let cursor = new Date(baseStart);
+
+  while (cursor <= rangeEnd && count < maxOccurrences) {
+    // Check if this occurrence is within range
+    if (cursor >= rangeStart) {
+      // For WEEKLY with BYDAY, check if this day matches
+      if (rule.freq === 'WEEKLY' && rule.byDay) {
+        const currentDay = cursor.getDay();
+        const dayAbbrs = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+        if (rule.byDay.includes(dayAbbrs[currentDay])) {
+          occurrences.push(new Date(cursor));
+          count++;
+        }
+      } else if (rule.freq === 'MONTHLY' && rule.byMonthDay) {
+        const currentDate = cursor.getDate();
+        if (rule.byMonthDay.includes(currentDate)) {
+          occurrences.push(new Date(cursor));
+          count++;
+        }
+      } else {
+        occurrences.push(new Date(cursor));
+        count++;
+      }
+    }
+
+    // Advance cursor based on frequency
+    switch (rule.freq) {
+      case 'DAILY':
+        cursor.setDate(cursor.getDate() + rule.interval);
+        break;
+      case 'WEEKLY':
+        if (rule.byDay) {
+          // Move to next day, we'll check each day
+          cursor.setDate(cursor.getDate() + 1);
+        } else {
+          cursor.setDate(cursor.getDate() + 7 * rule.interval);
+        }
+        break;
+      case 'MONTHLY':
+        if (rule.byMonthDay) {
+          cursor.setDate(cursor.getDate() + 1);
+        } else {
+          cursor.setMonth(cursor.getMonth() + rule.interval);
+        }
+        break;
+      case 'YEARLY':
+        cursor.setFullYear(cursor.getFullYear() + rule.interval);
+        break;
+      default:
+        // Unknown frequency, stop
+        return occurrences;
+    }
+  }
+
+  return occurrences;
 }
 
 function processICSProperty(event, key, value) {
