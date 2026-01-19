@@ -48,7 +48,13 @@ export default {
       });
 
       if (!response.ok) {
-        return new Response(JSON.stringify({ error: 'Failed to fetch calendar' }), {
+        let errorMsg = 'Failed to fetch calendar';
+        if (response.status === 404) {
+          errorMsg = 'Calendar not found. Make sure to use the Secret ICS URL from Google Calendar Settings, not the public URL.';
+        } else if (response.status === 403) {
+          errorMsg = 'Access denied. The calendar may be private.';
+        }
+        return new Response(JSON.stringify({ error: errorMsg, status: response.status }), {
           status: response.status,
           headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
         });

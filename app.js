@@ -260,8 +260,13 @@ function renderCalendarList() {
 
   elements.calendarList.innerHTML = state.calendars.map(cal => {
     const colorClass = CALENDAR_COLORS[cal.color];
+    const hasError = cal.error;
+    const eventCount = cal.events?.length || 0;
+    const statusText = hasError ? `Error: ${cal.error}` : (eventCount > 0 ? `${eventCount} events` : 'No events loaded');
+    const statusClass = hasError ? 'text-rose-400' : 'text-slate-500';
+
     return `
-      <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-800/30 border border-white/5 group">
+      <div class="flex items-center gap-3 p-3 rounded-lg ${hasError ? 'bg-rose-900/20 border-rose-500/30' : 'bg-slate-800/30 border-white/5'} border group">
         <button
           onclick="toggleCalendarVisibility('${cal.id}')"
           class="flex-shrink-0 w-5 h-5 rounded border-2 ${cal.visible ? 'bg-gradient-to-r ' + colorClass.bg + ' border-transparent' : 'border-slate-500 bg-transparent'} transition-all hover:scale-110"
@@ -273,7 +278,7 @@ function renderCalendarList() {
         </button>
         <div class="flex-1 min-w-0">
           <div class="font-medium text-sm text-white truncate">${escapeHtml(cal.name)}</div>
-          <div class="text-xs text-slate-500 truncate">${escapeHtml(cal.url.substring(0, 50))}...</div>
+          <div class="text-xs ${statusClass} truncate">${escapeHtml(statusText)}</div>
         </div>
         <button
           onclick="removeCalendar('${cal.id}')"
@@ -312,28 +317,44 @@ async function handleLoadCalendars() {
       state.calendars.map(async (cal) => {
         const icsData = await fetchICS(cal.url);
         cal.events = parseICS(icsData);
+        cal.error = null;
         return cal;
       })
     );
 
-    // Count successes and failures
+    // Track successes and failures with details
+    const failedCalendars = [];
+    let totalEvents = 0;
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        state.calendars[index].error = result.reason.message;
+        state.calendars[index].events = [];
+        failedCalendars.push(state.calendars[index].name);
+      } else {
+        totalEvents += state.calendars[index].events.length;
+      }
+    });
+
     const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    const failed = failedCalendars.length;
 
     if (successful === 0) {
-      throw new Error('Failed to load any calendars');
+      const firstError = results[0]?.reason?.message || 'Unknown error';
+      throw new Error(firstError);
     }
 
     state.isLoaded = true;
     refreshCalendarDisplay();
     setLoaded(true);
+    renderCalendarList(); // Update list to show any errors
 
     if (failed > 0) {
-      setStatus(`Loaded ${successful} calendar(s), ${failed} failed`, 'success');
+      setStatus(`Loaded ${successful} calendar(s) with ${totalEvents} events. ${failed} failed: ${failedCalendars.join(', ')}`, 'error');
     } else {
       const { start, end } = getSelectedRange();
       const endDisplay = new Date(end.getTime() - 86400000);
-      setStatus(`Showing ${formatDateDisplay(start)} to ${formatDateDisplay(endDisplay)}`, 'success');
+      setStatus(`Showing ${formatDateDisplay(start)} to ${formatDateDisplay(endDisplay)} (${totalEvents} events)`, 'success');
     }
   } catch (error) {
     console.error('Load error:', error);
