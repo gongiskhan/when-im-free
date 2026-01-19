@@ -175,43 +175,38 @@ function wireEventListeners() {
   elements.btnCopy.addEventListener('click', handleCopyToClipboard);
   elements.btnAddCalendar.addEventListener('click', handleAddCalendar);
 
-  // Auto-switch mode and reload on date changes
+  // Auto-switch mode and reload calendars on date changes
   elements.weekSelect.addEventListener('change', () => {
     elements.useWeek.checked = true;
-    if (state.isLoaded) {
-      refreshCalendarDisplay();
-      updateDateRangeStatus();
+    if (state.calendars.length > 0) {
+      handleLoadCalendars();
     }
   });
 
   elements.rangeStart.addEventListener('change', () => {
     elements.useRange.checked = true;
-    if (state.isLoaded) {
-      refreshCalendarDisplay();
-      updateDateRangeStatus();
+    if (state.calendars.length > 0) {
+      handleLoadCalendars();
     }
   });
 
   elements.rangeEnd.addEventListener('change', () => {
     elements.useRange.checked = true;
-    if (state.isLoaded) {
-      refreshCalendarDisplay();
-      updateDateRangeStatus();
+    if (state.calendars.length > 0) {
+      handleLoadCalendars();
     }
   });
 
   // Also reload when switching between week and range modes
   elements.useWeek.addEventListener('change', () => {
-    if (state.isLoaded && elements.useWeek.checked) {
-      refreshCalendarDisplay();
-      updateDateRangeStatus();
+    if (state.calendars.length > 0 && elements.useWeek.checked) {
+      handleLoadCalendars();
     }
   });
 
   elements.useRange.addEventListener('change', () => {
-    if (state.isLoaded && elements.useRange.checked) {
-      refreshCalendarDisplay();
-      updateDateRangeStatus();
+    if (state.calendars.length > 0 && elements.useRange.checked) {
+      handleLoadCalendars();
     }
   });
 
