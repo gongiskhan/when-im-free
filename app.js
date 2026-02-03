@@ -15,6 +15,9 @@ const CONFIG = {
   DAY_START_HOUR: 9,
   DAY_END_HOUR: 21,
 
+  // Personal time settings (after this hour on weekdays = personal time)
+  PERSONAL_TIME_START: 18, // 6pm
+
   // Pixels per hour for rendering
   PX_PER_HOUR: 56, // 3.5rem = 56px
 
@@ -863,8 +866,11 @@ function renderCalendar(rangeStart, rangeEnd, busyByDay) {
           const dayKey = formatDate(day);
           const isToday = dayKey === today;
           const intervals = busyByDay.get(dayKey) || [];
+          const dayOfWeek = day.getDay(); // 0 = Sunday, 6 = Saturday
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-          const blocks = intervals
+          // Generate calendar event blocks
+          const eventBlocks = intervals
             .map((interval) => clampToWorkingHours(interval.start, interval.end, day))
             .filter(Boolean)
             .map(({ startMin, endMin }) => {
@@ -884,6 +890,37 @@ function renderCalendar(rangeStart, rangeEnd, busyByDay) {
             })
             .join('');
 
+          // Generate personal time blocks (after 6pm on weekdays, all day on weekends)
+          let personalTimeBlock = '';
+          if (isWeekend) {
+            // Full day personal time on weekends
+            const height = (CONFIG.DAY_END_HOUR - CONFIG.DAY_START_HOUR) * CONFIG.PX_PER_HOUR;
+            personalTimeBlock = `
+              <div
+                class="personal-time-block"
+                style="top: 0px; height: ${height}px;"
+                title="Personal Time"
+              >
+                Personal Time
+              </div>
+            `;
+          } else {
+            // After 6pm on weekdays
+            const personalStartMin = (CONFIG.PERSONAL_TIME_START - CONFIG.DAY_START_HOUR) * 60;
+            const personalEndMin = (CONFIG.DAY_END_HOUR - CONFIG.DAY_START_HOUR) * 60;
+            const top = (personalStartMin / 60) * CONFIG.PX_PER_HOUR;
+            const height = ((personalEndMin - personalStartMin) / 60) * CONFIG.PX_PER_HOUR;
+            personalTimeBlock = `
+              <div
+                class="personal-time-block"
+                style="top: ${top}px; height: ${height}px;"
+                title="Personal Time"
+              >
+                Personal Time
+              </div>
+            `;
+          }
+
           return `
           <div class="calendar-day-column ${isToday ? 'today-column' : ''}" style="height: ${totalHeight}px;">
             <!-- Hour grid lines -->
@@ -892,8 +929,11 @@ function renderCalendar(rangeStart, rangeEnd, busyByDay) {
               .map(() => `<div class="calendar-hour-row"></div>`)
               .join('')}
 
-            <!-- Busy blocks -->
-            ${blocks}
+            <!-- Personal time blocks (rendered first, below event blocks) -->
+            ${personalTimeBlock}
+
+            <!-- Busy blocks from calendar events -->
+            ${eventBlocks}
           </div>
         `;
         })
